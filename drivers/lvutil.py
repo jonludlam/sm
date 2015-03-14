@@ -77,10 +77,22 @@ class LVInfo:
                 (self.name, self.size, self.active, self.open, self.hidden, \
                 self.readonly)
 
+def setvginfo(vg,devices):
+    cmd = ["/sbin/xenvm", "set-vg-info", "--pvpath", devices[0], "--uri", "http://127.0.0.1:4000", vg]
+    util.pread2(cmd)    
+
+def runxenvmd(vg,devices):
+    configfile = "/etc/xenvm.d/%s.xenvmd.config" % vg
+    config = "((listenPort 4000) (host_allocation_quantum 128) (host_low_water_mark 8) (vg %s) (devices (%s)) )\n" % (vg," ".join(devices))
+    with open(configfile,'w') as f:
+        f.write(config)
+    cmd = ["/sbin/xenvmd", "--daemon", "--config", configfile]
+    util.pread2(cmd)
+    setvginfo(vg,devices)
 
 def _checkVG(vgname):
     try:
-        cmd = [CMD_VGS, vgname]
+        cmd = ["/sbin/xenvm", "vgs", vgname]
         util.pread2(cmd)
         return True
     except:
@@ -113,7 +125,7 @@ def _getLVsize(path):
 
 def _getVGstats(vgname):
     try:
-        cmd = [CMD_VGS, "--noheadings", "--nosuffix", "--units", "b", vgname]
+        cmd = ["/sbin/xenvm", "vgs", "--noheadings", "--nosuffix", "--units", "b", vgname]
         text = util.pread(cmd).split()
         size = long(text[5])
         freespace = long(text[6])
@@ -327,16 +339,16 @@ def createVG(root, vgname):
             else:
                 raise xs_errors.XenError('LVMWrite', \
                       opterr='device %s' % dev)
-        try:
-            cmd = [CMD_PVCREATE, "--metadatasize", "10M", dev]
-            util.pread2(cmd)
-        except util.CommandException, inst:
-            raise xs_errors.XenError('LVMPartCreate', \
-                  opterr='error is %d' % inst.code)
+#        try:
+#            cmd = [CMD_PVCREATE, "--metadatasize", "10M", dev]
+#            util.pread2(cmd)
+#        except util.CommandException, inst:
+#            raise xs_errors.XenError('LVMPartCreate', \
+#                  opterr='error is %d' % inst.code)
 
     # Create VG on first device
     try:
-        cmd = [CMD_VGCREATE, vgname, rootdev]
+        cmd = ["/sbin/xenvm","vgcreate", vgname, rootdev]
         util.pread2(cmd)
     except :
         raise xs_errors.XenError('LVMGroupCreate')
@@ -354,12 +366,12 @@ def createVG(root, vgname):
             except:
                 pass
             raise xs_errors.XenError('LVMGroupCreate')
-    try:
-        cmd = [CMD_VGCHANGE, "-an", vgname]
-        util.pread2(cmd)
-    except util.CommandException, inst:
-        raise xs_errors.XenError('LVMUnMount', \
-              opterr='errno is %d' % inst.code)
+#    try:
+#        cmd = [CMD_VGCHANGE, "-an", vgname]
+#        util.pread2(cmd)
+#    except util.CommandException, inst:
+#        raise xs_errors.XenError('LVMUnMount', \
+#              opterr='errno is %d' % inst.code)
 
 def removeVG(root, vgname):
     # Check PVs match VG
@@ -402,10 +414,10 @@ def setActiveVG(path, active):
 
 def create(name, size, vgname, tag=None, size_in_percentage=None):
     if size_in_percentage:
-        cmd = [CMD_LVCREATE, "-n", name, "-l", size_in_percentage, vgname]
+        cmd = ["/sbin/xenvm", "lvcreate", "-n", name, "-l", size_in_percentage, vgname]
     else:
         size_mb = size / 1024 / 1024
-        cmd = [CMD_LVCREATE, "-n", name, "-L", str(size_mb), vgname]
+        cmd = ["/sbin/xenvm", "lvcreate", "-n", name, "-L", str(size_mb), vgname]
     if tag:
         cmd.extend(["--addtag", tag])
     util.pread2(cmd)
@@ -424,7 +436,7 @@ def remove(path, config_param=None):
 
 def _remove(path, config_param=None):
     CONFIG_TAG = "--config"
-    cmd = [CMD_LVREMOVE, "-f", path]
+    cmd = ["/sbin/xenvm","lvremove", "-f", path]
     if config_param:
         cmd.extend([CONFIG_TAG, "devices{" + config_param + "}"])
     ret = util.pread2(cmd)
@@ -441,7 +453,7 @@ def setReadonly(path, readonly):
     ret = util.pread(cmd)
 
 def exists(path):
-    cmd = [CMD_LVS, "--noheadings", path]
+    cmd = ["/sbin/xenvm","lvs","--noheadings", path]
     try:
         ret = util.pread2(cmd)
         return True
@@ -492,7 +504,7 @@ def setHidden(path, hidden = True):
     util.pread2(cmd)
 
 def activateNoRefcount(path, refresh):
-    cmd = [CMD_LVCHANGE, "-ay", path]
+    cmd = ["/sbin/xenvm", "lvchange", "-ay", path]
     text = util.pread2(cmd)
     if not _checkActive(path):
         raise util.CommandException(-1, str(cmd), "LV not activated")
@@ -527,7 +539,7 @@ def deactivateNoRefcount(path):
     _lvmBugCleanup(path)
 
 def _deactivate(path):
-    cmd = [CMD_LVCHANGE, "-an", path]
+    cmd = ["/sbin/xenvm","lvchange", "-an", path]
     text = util.pread2(cmd)
 
 #def getLVInfo(path):
